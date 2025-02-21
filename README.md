@@ -13,7 +13,7 @@ A vibrant, 3D twist on the classic Breakout game built with Three.js. Control a 
 - **Responsive Design**: Adapts to window resizing for a seamless experience.
 
 ## Demo
-Try the game live [here](#) 
+Try the game live [here](https://makalin.github.io/Breakout3D/) 
 
 ## Installation
 1. **Clone the Repository**:
