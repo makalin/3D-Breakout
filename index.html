@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Colorful 3D Breakout</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { display: block; }
+        #scoreLives {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="scoreLives">Score: 0 | Lives: 3</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Audio setup for chiptune-like sounds
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playChipSound(frequency, duration) {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.type = 'square';
+            oscillator.frequency.value = frequency;
+            gainNode.gain.value = 0.1;
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            oscillator.stop(audioCtx.currentTime + duration);
+        }
+
+        // Game objects with colorful materials
+        const paddleGeometry = new THREE.BoxGeometry(2, 0.2, 0.5);
+        const paddleMaterial = new THREE.MeshPhongMaterial({ color: 0xffa500 }); // Bright orange
+        const paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
+        scene.add(paddle);
+        paddle.position.y = -8;
+
+        const ballGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+        const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff }); // Magenta
+        const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+        scene.add(ball);
+
+        // Colorful bricks
+        const bricks = [];
+        const brickColors = [0xff4040, 0x40ff40, 0x4040ff, 0xffff40, 0xff80ff]; // Red, Green, Blue, Yellow, Pink
+        const brickGeometry = new THREE.BoxGeometry(1, 0.5, 0.5);
+        for (let x = -5; x < 5; x++) {
+            for (let y = 2; y < 6; y++) {
+                const colorIndex = (x + 5 + (y - 2) * 10) % brickColors.length;
+                const brickMaterial = new THREE.MeshPhongMaterial({ color: brickColors[colorIndex] });
+                const brick = new THREE.Mesh(brickGeometry, brickMaterial);
+                brick.position.set(x, y, 0);
+                scene.add(brick);
+                bricks.push(brick);
+            }
+        }
+
+        // Lighting for better color visibility
+        const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(0, 1, 0);
+        scene.add(directionalLight);
+
+        camera.position.z = 15;
+
+        // Game state
+        let ballVelocity = new THREE.Vector3(0.1, 0.1, 0);
+        let score = 0;
+        let lives = 3;
+        let gameOver = false;
+
+        // UI elements
+        const scoreLivesElement = document.getElementById('scoreLives');
+
+        // Mouse control
+        document.addEventListener('mousemove', (event) => {
+            const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+            paddle.position.x = mouseX * 10;
+            paddle.position.x = Math.max(-8, Math.min(8, paddle.position.x));
+        });
+
+        // Collision detection
+        function checkCollision(obj1, obj2) {
+            const box1 = new THREE.Box3().setFromObject(obj1);
+            const box2 = new THREE.Box3().setFromObject(obj2);
+            return box1.intersectsBox(box2);
+        }
+
+        // Game loop
+        function animate() {
+            if (gameOver) return;
+
+            requestAnimationFrame(animate);
+
+            // Ball movement
+            ball.position.add(ballVelocity);
+
+            // Wall collision
+            if (ball.position.x > 10 || ball.position.x < -10) {
+                ballVelocity.x = -ballVelocity.x;
+                playChipSound(440, 0.1); // Bounce sound
+            }
+            if (ball.position.y > 10) {
+                ballVelocity.y = -ballVelocity.y;
+                playChipSound(440, 0.1);
+            }
+            if (ball.position.y < -10) {
+                lives--;
+                scoreLivesElement.textContent = `Score: ${score} | Lives: ${lives}`;
+                if (lives <= 0) {
+                    gameOver = true;
+                    playChipSound(220, 0.5); // Game over sound
+                    alert('Game Over! Score: ' + score);
+                    return;
+                }
+                // Reset ball
+                ball.position.set(0, -7, 0);
+                ballVelocity.set(0.1, 0.1, 0);
+            }
+
+            // Paddle collision
+            if (checkCollision(ball, paddle)) {
+                ballVelocity.y = Math.abs(ballVelocity.y);
+                playChipSound(660, 0.1); // Paddle hit sound
+            }
+
+            // Brick collision
+            for (let i = bricks.length - 1; i >= 0; i--) {
+                if (checkCollision(ball, bricks[i])) {
+                    scene.remove(bricks[i]);
+                    bricks.splice(i, 1);
+                    ballVelocity.y = -ballVelocity.y;
+                    score += 10;
+                    scoreLivesElement.textContent = `Score: ${score} | Lives: ${lives}`;
+                    playChipSound(880, 0.1); // Brick break sound
+                    break;
+                }
+            }
+
+            if (bricks.length === 0) {
+                alert('Level Complete! Score: ' + score);
+                gameOver = true;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Background music simulation
+        function playBackgroundMusic() {
+            setInterval(() => {
+                if (!gameOver) {
+                    playChipSound(330, 0.2);
+                    setTimeout(() => playChipSound(440, 0.2), 200);
+                    setTimeout(() => playChipSound(550, 0.2), 400);
+                }
+            }, 600);
+        }
+
+        playBackgroundMusic();
+        animate();
+
+        // Window resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
